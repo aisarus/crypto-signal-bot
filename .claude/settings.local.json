@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/ariel/projects/btc_ bot/src/strategy/**)",
+      "Read(//c/Users/ariel/projects/btc_ bot/src/**)",
+      "Read(//c/Users/ariel/projects/btc_ bot/src/clients/**)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && pip install -e \".[dev]\" -q 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && pip install -e \".[dev]\" 2>&1 | tail -10)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && pip install -e \".[dev]\" 2>&1 | tail -8)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v 2>&1)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v --tb=short 2>&1 | tail -15)"
+    ]
+  }
+}

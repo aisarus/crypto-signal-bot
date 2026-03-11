@@ -1,0 +1,52 @@
+# Telegram (обязательно)
+# telegram_token: задаётся через env TELEGRAM_TOKEN
+# telegram_chat_id: задаётся через env TELEGRAM_CHAT_ID
+
+# Gemini API (опционально — бот работает без него)
+# gemini_api_key: задаётся через env GEMINI_API_KEY
+
+# Монеты для мониторинга
+coins:
+  - BTCUSDT
+  - ETHUSDT
+  - SOLUSDT
+  - BNBUSDT
+  - XRPUSDT
+
+# Интервалы проверки
+check_interval_sec: 300    # сбор цен: каждые 5 мин
+signal_interval_sec: 3600  # проверка сигналов: каждый час
+
+# Параметры стратегии
+strategy:
+  rsi_period: 14
+  rsi_oversold: 30
+  rsi_overbought: 70
+  fg_fear: 25
+  fg_greed: 75
+  sma_period: 200
+  volume_spike: 1.5
+  weight_rsi: 0.35
+  weight_fg: 0.25
+  weight_sma: 0.25
+  weight_volume: 0.15
+  min_confidence: 0.3
+  cooldown_hours: 8
+  strong_cooldown_hours: 4
+
+# Параметры бэктеста
+backtest:
+  default_days: 365
+  initial_capital: 10000
+  position_size_pct: 10
+  commission_pct: 0.1
+  cache_refresh_hours: 24
+
+# Путь к базе данных
+db_path: data/signals.db
+
+# Уровень логирования
+log_level: INFO
+
+# Часовой пояс
+timezone: Asia/Jerusalem
