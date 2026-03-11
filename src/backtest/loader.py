@@ -5,15 +5,15 @@ from datetime import datetime
 
 import aiohttp
 
-from src.market.binance import BinanceClient, Candle
+from src.market.binance import Candle
 from src.market.fear_greed import FearGreedIndex
 
 log = logging.getLogger(__name__)
 
 
 class HistoricalLoader:
-    def __init__(self, binance: BinanceClient, fg: FearGreedIndex):
-        self.binance = binance
+    def __init__(self, price_source, fg: FearGreedIndex):
+        self.price_source = price_source
         self.fg = fg
 
     async def load_candles(self, symbol: str, interval: str, days: int) -> list[Candle]:
@@ -28,7 +28,7 @@ class HistoricalLoader:
             if limit <= 0:
                 break
             try:
-                batch = await self.binance.get_klines(symbol, interval, limit)
+                batch = await self.price_source.get_klines(symbol, interval, limit)
                 all_candles.extend(batch)
                 if i < batches - 1:
                     await asyncio.sleep(0.2)

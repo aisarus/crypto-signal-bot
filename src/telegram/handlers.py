@@ -95,7 +95,7 @@ class Handlers:
 
                     # Chart
                     try:
-                        candles = await self.bot.binance.get_klines(sig.symbol, "1d", 60)
+                        candles = await self.bot.price_source.get_klines(sig.symbol, "1d", 60)
                         if candles:
                             img = self.bot.chart.generate(sig, candles)
                             if img:
@@ -145,7 +145,7 @@ class Handlers:
         try:
             from src.backtest.runner import BacktestRunner
             from src.backtest.loader import HistoricalLoader
-            loader = HistoricalLoader(self.bot.binance, self.bot.fg)
+            loader = HistoricalLoader(self.bot.price_source, self.bot.fg)
             runner = BacktestRunner(self.bot.engine.scorer, loader)
             result = await runner.run(symbol, days, self.bot.config.backtest)
             text = format_backtest(symbol, result, days, self.bot.config.backtest.initial_capital)
@@ -158,11 +158,7 @@ class Handlers:
         if not self._authorized(update):
             return
         try:
-            binance_ms = None
-            try:
-                binance_ms = await self.bot.binance.ping()
-            except Exception:
-                pass
+            source_name, source_ms = await self.bot.price_source.ping()
 
             fg_val = None
             fg_age = 0
@@ -187,7 +183,12 @@ class Handlers:
             sig_24h = await self.bot.store.get_signal_count(24)
             sig_7d = await self.bot.store.get_signal_count(24 * 7)
 
-            text = format_health(binance_ms, fg_val, fg_age, gemini_ok, db_count, uptime, sig_24h, sig_7d)
+            text = format_health(source_ms, fg_val, fg_age, gemini_ok, db_count, uptime, sig_24h, sig_7d)
+            # Prepend source info
+            src_line = f"📡 Источник: {source_name}"
+            if source_ms:
+                src_line += f" ({source_ms:.0f}мс)"
+            text = src_line + "\n\n" + text
             await update.message.reply_text(text)
         except Exception as e:
             await update.message.reply_text(f"❌ {e}")
@@ -225,6 +226,15 @@ class Handlers:
         symbol = ctx.args[0].upper()
         if not symbol.endswith("USDT"):
             symbol += "USDT"
+        # Validate against CoinGecko SYMBOL_MAP when Binance unavailable
+        if not self.bot.price_source.supports_symbol(symbol):
+            from src.market.coingecko import SYMBOL_MAP
+            supported = ", ".join(s.replace("USDT", "") for s in SYMBOL_MAP)
+            await update.message.reply_text(
+                f"⚠️ {symbol} не поддерживается в режиме CoinGecko.\n"
+                f"Доступны: {supported}"
+            )
+            return
         if symbol not in self.bot.config.coins:
             self.bot.config.coins.append(symbol)
             await update.message.reply_text(f"✅ {symbol} добавлен")

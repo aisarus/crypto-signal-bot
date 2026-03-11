@@ -86,6 +86,15 @@ class BinanceClient:
             low_24h=float(data["lowPrice"]),
         )
 
+    async def is_available(self) -> bool:
+        """Check if Binance API is reachable (returns False on 451, timeouts, etc.)."""
+        try:
+            sess = self._sess()
+            async with sess.get(f"{BASE}/api/v3/ping", timeout=aiohttp.ClientTimeout(total=5)) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
     async def ping(self) -> float:
         """Returns latency in ms or raises."""
         import time

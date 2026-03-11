@@ -51,10 +51,10 @@ class Signal:
 
 
 class StrategyEngine:
-    def __init__(self, scorer: Scorer, store, binance, fear_greed, indicators: Indicators):
+    def __init__(self, scorer: Scorer, store, price_source, fear_greed, indicators: Indicators):
         self.scorer = scorer
         self.store = store
-        self.binance = binance
+        self.price_source = price_source
         self.fear_greed = fear_greed
         self.indicators = indicators
 
@@ -63,7 +63,7 @@ class StrategyEngine:
         price = await self.store.get_latest_price(symbol)
         if price is None:
             try:
-                prices = await self.binance.get_all_prices([symbol])
+                prices = await self.price_source.get_all_prices([symbol])
                 price = prices.get(symbol, 0.0)
             except Exception as e:
                 log.warning("Cannot get price for %s: %s", symbol, e)
@@ -91,7 +91,7 @@ class StrategyEngine:
         # 24h change
         change_24h = None
         try:
-            stats = await self.binance.get_24h_stats(symbol)
+            stats = await self.price_source.get_24h_stats(symbol)
             change_24h = stats.price_change_pct
         except Exception:
             pass
@@ -144,9 +144,9 @@ class StrategyEngine:
         for sym in targets:
             try:
                 # Refresh data first
-                candles_1d = await self.binance.get_klines(sym, "1d", 200)
+                candles_1d = await self.price_source.get_klines(sym, "1d", 200)
                 await self.store.save_candles(sym, "1d", candles_1d)
-                candles_1h = await self.binance.get_klines(sym, "1h", 50)
+                candles_1h = await self.price_source.get_klines(sym, "1h", 50)
                 await self.store.save_candles(sym, "1h", candles_1h)
                 await self.fear_greed.refresh()
 

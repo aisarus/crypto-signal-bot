@@ -8,7 +8,9 @@
       "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && pip install -e \".[dev]\" 2>&1 | tail -10)",
       "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && pip install -e \".[dev]\" 2>&1 | tail -8)",
       "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v 2>&1)",
-      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v --tb=short 2>&1 | tail -15)"
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v --tb=short 2>&1 | tail -15)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -m pytest tests/ -v --tb=short 2>&1)",
+      "Bash(cd \"C:/Users/ariel/projects/BTC_ALERT_BOT\" && python -c \"from src.market.coingecko import CoinGeckoClient, SYMBOL_MAP; from src.market.price_source import PriceSource; print\\('OK — modules import fine'\\); print\\('SYMBOL_MAP:', list\\(SYMBOL_MAP.keys\\(\\)\\)\\)\")"
     ]
   }
 }

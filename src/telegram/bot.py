@@ -14,13 +14,13 @@ log = logging.getLogger(__name__)
 
 
 class TelegramBot:
-    def __init__(self, config: Config, engine, cooldown, gemini, store, binance, fg):
+    def __init__(self, config: Config, engine, cooldown, gemini, store, price_source, fg):
         self.config = config
         self.engine = engine
         self.cooldown = cooldown
         self.gemini = gemini
         self.store = store
-        self.binance = binance
+        self.price_source = price_source
         self.fg = fg
         self.chart = SignalChart()
         self.start_time = time.monotonic()
@@ -54,7 +54,7 @@ class TelegramBot:
         await self.send_text(text)
         if with_chart:
             try:
-                candles = await self.binance.get_klines(signal.symbol, "1d", 60)
+                candles = await self.price_source.get_klines(signal.symbol, "1d", 60)
                 if candles:
                     img = self.chart.generate(signal, candles)
                     if img:

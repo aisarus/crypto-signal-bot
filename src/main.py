@@ -8,11 +8,11 @@ from datetime import datetime, timezone
 log = logging.getLogger(__name__)
 
 
-async def price_loop(config, binance, store):
+async def price_loop(config, price_source, store):
     """Collect prices every check_interval_sec."""
     while True:
         try:
-            prices = await binance.get_all_prices(config.coins)
+            prices = await price_source.get_all_prices(config.coins)
             ts = datetime.now(timezone.utc)
             for symbol, price in prices.items():
                 await store.save_price(symbol, price, 0, ts)
@@ -24,14 +24,12 @@ async def price_loop(config, binance, store):
 
 async def signal_loop(config, engine, cooldown, gemini, bot, store):
     """Check signals every signal_interval_sec."""
-    # Wait a bit before first check to let data load
     await asyncio.sleep(60)
     while True:
         try:
             signals = await engine.evaluate_all()
             for sig in signals:
                 if sig.type.is_actionable() and cooldown.can_send(sig.symbol, sig.type):
-                    # Add AI comment
                     if gemini:
                         from src.ai.prompts import SIGNAL_SYSTEM, build_signal_prompt
                         try:
@@ -49,14 +47,14 @@ async def signal_loop(config, engine, cooldown, gemini, bot, store):
         await asyncio.sleep(config.signal_interval_sec)
 
 
-async def backtest_cache_loop(config, scorer, store, binance, fg):
+async def backtest_cache_loop(config, scorer, store, price_source, fg):
     """Refresh backtest cache daily."""
     from src.backtest.runner import BacktestRunner
     from src.backtest.loader import HistoricalLoader
-    loader = HistoricalLoader(binance, fg)
+    loader = HistoricalLoader(price_source, fg)
     runner = BacktestRunner(scorer, loader)
 
-    await asyncio.sleep(300)  # wait 5 min before first run
+    await asyncio.sleep(300)
     while True:
         try:
             for symbol in config.coins:
@@ -91,6 +89,8 @@ async def main():
     from src.logger import setup_logging
     from src.market.store import MarketStore
     from src.market.binance import BinanceClient
+    from src.market.coingecko import CoinGeckoClient
+    from src.market.price_source import PriceSource
     from src.market.fear_greed import FearGreedIndex
     from src.market.indicators import Indicators
     from src.strategy.scorer import Scorer
@@ -106,30 +106,43 @@ async def main():
 
     store = MarketStore(config.db_path)
     binance = BinanceClient()
+    coingecko = CoinGeckoClient()
+    price_source = PriceSource(binance, coingecko)
     fg = FearGreedIndex()
     indicators = Indicators()
     scorer = Scorer(config.strategy)
-    engine = StrategyEngine(scorer, store, binance, fg, indicators)
+    engine = StrategyEngine(scorer, store, price_source, fg, indicators)
     cooldown = Cooldown(config.strategy.cooldown_hours, config.strategy.strong_cooldown_hours)
     gemini = GeminiClient(config.gemini_api_key) if config.gemini_api_key else None
-    bot = TelegramBot(config, engine, cooldown, gemini, store, binance, fg)
+    bot = TelegramBot(config, engine, cooldown, gemini, store, price_source, fg)
 
     await store.init_db()
 
+    # Check data source availability
+    log.info("Проверка источника данных...")
+    await price_source.init()
+
     # Initial data load
-    log.info("Loading historical data (200 daily + 50 hourly candles)...")
+    log.info("Loading historical data (200 daily + 50 hourly candles) via %s...", price_source.source_name)
     for symbol in config.coins:
         try:
-            candles_1d = await binance.get_klines(symbol, "1d", 200)
+            candles_1d = await price_source.get_klines(symbol, "1d", 200)
             await store.save_candles(symbol, "1d", candles_1d)
-            candles_1h = await binance.get_klines(symbol, "1h", 50)
+            candles_1h = await price_source.get_klines(symbol, "1h", 50)
             await store.save_candles(symbol, "1h", candles_1h)
             log.info("Loaded %s: %d daily, %d hourly candles", symbol, len(candles_1d), len(candles_1h))
         except Exception as e:
             log.error("Failed to load initial data for %s: %s", symbol, e)
 
     log.info("Historical data loaded. Starting bot...")
-    await bot.send_text("🤖 Signal Bot запущен\n/check — проверить сейчас")
+
+    source_note = (
+        f"📡 Источник: {price_source.source_name}"
+        if price_source.source_name == "CoinGecko"
+        else ""
+    )
+    startup_msg = f"🤖 Signal Bot запущен\n{source_note}\n/check — проверить сейчас".strip()
+    await bot.send_text(startup_msg)
 
     # Graceful shutdown
     shutdown_event = asyncio.Event()
@@ -147,9 +160,9 @@ async def main():
 
     async def run_all():
         tasks = [
-            asyncio.create_task(price_loop(config, binance, store)),
+            asyncio.create_task(price_loop(config, price_source, store)),
             asyncio.create_task(signal_loop(config, engine, cooldown, gemini, bot, store)),
-            asyncio.create_task(backtest_cache_loop(config, scorer, store, binance, fg)),
+            asyncio.create_task(backtest_cache_loop(config, scorer, store, price_source, fg)),
             asyncio.create_task(cleanup_loop(store)),
             asyncio.create_task(bot.start_polling()),
         ]
@@ -170,7 +183,7 @@ async def main():
             await bot.send_text("🔴 Bot остановлен")
         except Exception:
             pass
-        await binance.close()
+        await price_source.close()
         await fg.close()
         if gemini:
             await gemini.close()
