@@ -45,8 +45,21 @@ class BinanceClient:
         for attempt in range(retries):
             try:
                 async with self._sess().get(url, params=params) as r:
+                    if r.status == 451:
+                        raise aiohttp.ClientResponseError(
+                            r.request_info, r.history,
+                            status=451, message="Unavailable For Legal Reasons",
+                        )
                     r.raise_for_status()
                     return await r.json()
+            except aiohttp.ClientResponseError as e:
+                if e.status == 451:
+                    raise  # не ретраим — постоянная блокировка
+                if attempt == retries - 1:
+                    raise
+                log.warning("Binance retry %d/%d: %s", attempt + 1, retries, e)
+                await asyncio.sleep(delay)
+                delay *= 2
             except Exception as e:
                 if attempt == retries - 1:
                     raise
@@ -87,10 +100,15 @@ class BinanceClient:
         )
 
     async def is_available(self) -> bool:
-        """Check if Binance API is reachable (returns False on 451, timeouts, etc.)."""
+        """Check if Binance data API is reachable (returns False on 451, timeouts, etc.).
+        Uses a real data endpoint — /ping returns 200 even in blocked regions."""
         try:
             sess = self._sess()
-            async with sess.get(f"{BASE}/api/v3/ping", timeout=aiohttp.ClientTimeout(total=5)) as r:
+            async with sess.get(
+                f"{BASE}/api/v3/ticker/price",
+                params={"symbol": "BTCUSDT"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as r:
                 return r.status == 200
         except Exception:
             return False
