@@ -27,6 +27,15 @@ async def signal_loop(config, engine, cooldown, gemini, bot, store):
     await asyncio.sleep(60)
     while True:
         try:
+            # Refresh daily candles (1 request per coin, 3s pause between)
+            for symbol in config.coins:
+                try:
+                    candles_1d = await engine.price_source.get_klines(symbol, "1d", 200)
+                    await store.save_candles(symbol, "1d", candles_1d)
+                except Exception as e:
+                    log.warning("signal_loop candle refresh error for %s: %s", symbol, e)
+                await asyncio.sleep(3)
+
             signals = await engine.evaluate_all()
             for sig in signals:
                 if sig.type.is_actionable() and cooldown.can_send(sig.symbol, sig.type):

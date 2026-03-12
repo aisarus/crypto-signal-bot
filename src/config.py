@@ -45,7 +45,7 @@ class Config(BaseSettings):
     telegram_chat_id: str
     gemini_api_key: str = ""
     coins: list[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
-    check_interval_sec: int = 300
+    check_interval_sec: int = 600
     signal_interval_sec: int = 3600
     strategy: StrategyParams = StrategyParams()
     backtest: BacktestParams = BacktestParams()

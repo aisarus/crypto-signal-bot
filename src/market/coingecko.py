@@ -33,6 +33,8 @@ class CoinGeckoClient:
         self._session: aiohttp.ClientSession | None = None
         self._last_request_times: list[float] = []
         self._rpm_limit = 28  # stay safely under 30
+        self._stats_cache: dict[str, tuple[TickerStats, float]] = {}
+        self._stats_cache_ttl = 550  # seconds (~9 min, just under check_interval_sec)
 
     def _sess(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -83,11 +85,33 @@ class CoinGeckoClient:
             return {}
         data = await self._get(
             "/simple/price",
-            {"ids": ",".join(ids), "vs_currencies": "usd"},
+            {
+                "ids": ",".join(ids),
+                "vs_currencies": "usd",
+                "include_24hr_change": "true",
+                "include_24hr_vol": "true",
+            },
         )
-        # Reverse map: coin_id → symbol
         rev = {v: k for k, v in SYMBOL_MAP.items() if k in symbols}
-        return {rev[cid]: float(info["usd"]) for cid, info in data.items() if cid in rev}
+        prices: dict[str, float] = {}
+        now = time.monotonic()
+        for cid, info in data.items():
+            if cid not in rev:
+                continue
+            symbol = rev[cid]
+            prices[symbol] = float(info["usd"])
+            # Cache 24h stats so get_market_data() avoids extra requests
+            self._stats_cache[symbol] = (
+                TickerStats(
+                    volume=float(info.get("usd_24h_vol") or 0),
+                    quote_volume=float(info.get("usd_24h_vol") or 0),
+                    price_change_pct=float(info.get("usd_24h_change") or 0),
+                    high_24h=0.0,
+                    low_24h=0.0,
+                ),
+                now,
+            )
+        return prices
 
     async def get_ohlc(self, symbol: str, days: int = 200) -> list[Candle]:
         """
@@ -124,6 +148,12 @@ class CoinGeckoClient:
         return candles[-days:]
 
     async def get_market_data(self, symbol: str) -> TickerStats | None:
+        # Use stats cached by get_all_prices() if still fresh
+        cached = self._stats_cache.get(symbol)
+        if cached and (time.monotonic() - cached[1]) < self._stats_cache_ttl:
+            return cached[0]
+
+        # Fallback: individual request (e.g. first signal_loop before price_loop ran)
         coin_id = self._coin_id(symbol)
         if not coin_id:
             return None
